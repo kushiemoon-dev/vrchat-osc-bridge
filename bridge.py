@@ -24,6 +24,16 @@ except ImportError:
     SCREENSHOT_AVAILABLE = False
     print("⚠️  PIL not installed - screenshot disabled. Run: pip install Pillow")
 
+# Try to import audio recording library
+try:
+    import sounddevice as sd
+    import numpy as np
+    from scipy.io.wavfile import write as write_wav
+    AUDIO_AVAILABLE = True
+except ImportError:
+    AUDIO_AVAILABLE = False
+    print("⚠️  Audio libs not installed - voice disabled. Run: pip install sounddevice numpy scipy")
+
 app = Flask(__name__)
 
 # VRChat OSC settings (localhost because VRChat only listens locally)
@@ -179,6 +189,54 @@ def screenshot():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/listen', methods=['POST'])
+def listen():
+    """Record audio for a few seconds and return as WAV"""
+    if not AUDIO_AVAILABLE:
+        return jsonify({"error": "Audio libs not installed. Run: pip install sounddevice numpy scipy"}), 500
+    
+    data = request.json or {}
+    duration = data.get('duration', 5)  # Default 5 seconds
+    sample_rate = 44100
+    
+    try:
+        print(f"🎤 Recording {duration}s of audio...")
+        # Record audio from default input (microphone or loopback)
+        recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='int16')
+        sd.wait()  # Wait for recording to finish
+        print("🎤 Recording complete!")
+        
+        # Convert to WAV bytes
+        wav_bytes = io.BytesIO()
+        write_wav(wav_bytes, sample_rate, recording)
+        wav_bytes.seek(0)
+        
+        return send_file(wav_bytes, mimetype='audio/wav')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/listen/devices', methods=['GET'])
+def list_audio_devices():
+    """List available audio devices"""
+    if not AUDIO_AVAILABLE:
+        return jsonify({"error": "Audio libs not installed"}), 500
+    
+    try:
+        devices = sd.query_devices()
+        device_list = []
+        for i, d in enumerate(devices):
+            device_list.append({
+                "id": i,
+                "name": d['name'],
+                "inputs": d['max_input_channels'],
+                "outputs": d['max_output_channels'],
+                "default_input": i == sd.default.device[0],
+                "default_output": i == sd.default.device[1]
+            })
+        return jsonify({"devices": device_list})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     print("🦊 VRChat OSC Bridge - Lexis Edition")
     print(f"   OSC target: {VRC_IP}:{VRC_PORT}")
@@ -192,5 +250,7 @@ if __name__ == '__main__':
     print("  POST /raw         - Raw OSC message")
     print("  POST /launch      - Join a world (url or world_id)")
     print("  GET  /screenshot  - Capture screen (needs Pillow)")
+    print("  POST /listen      - Record audio (needs sounddevice)")
+    print("  GET  /listen/devices - List audio devices")
     print()
     app.run(host='0.0.0.0', port=8765, debug=False)
