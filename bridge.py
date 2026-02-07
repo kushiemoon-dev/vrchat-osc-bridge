@@ -283,7 +283,8 @@ def transcribe():
         
         print("🧠 Transcribing with Whisper...")
         model = whisper.load_model("base")  # Use 'base' for speed, 'medium' for accuracy
-        result = model.transcribe(temp_path, language="fr", fp16=False)
+        # Auto-detect language (don't force French)
+        result = model.transcribe(temp_path, fp16=False)
         
         text = result['text'].strip()
         print(f"📝 Transcription: {text}")
