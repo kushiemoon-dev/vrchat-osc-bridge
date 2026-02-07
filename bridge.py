@@ -28,7 +28,17 @@ except ImportError:
 try:
     import sounddevice as sd
     import numpy as np
-    from scipy.io.wavfile import write as write_wav
+    try:
+        from scipy.io.wavfile import write as write_wav
+    except ImportError:
+        # Fallback: use wave module
+        import wave
+        def write_wav(filename, rate, data):
+            with wave.open(filename, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(rate)
+                wf.writeframes(data.tobytes())
     AUDIO_AVAILABLE = True
 except ImportError:
     AUDIO_AVAILABLE = False
@@ -247,7 +257,10 @@ def transcribe():
     duration = data.get('duration', 5)
     device_id = data.get('device_id', None)  # Optional: specify input device
     sample_rate = 16000  # Whisper prefers 16kHz
-    temp_path = "temp_recording.wav"  # Use fixed filename to avoid Windows temp issues
+    # Use absolute path in user's temp folder
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, "lexis_recording.wav")
     
     try:
         import whisper
