@@ -247,9 +247,9 @@ def transcribe():
     duration = data.get('duration', 5)
     device_id = data.get('device_id', None)  # Optional: specify input device
     sample_rate = 16000  # Whisper prefers 16kHz
+    temp_path = "temp_recording.wav"  # Use fixed filename to avoid Windows temp issues
     
     try:
-        import tempfile
         import whisper
         
         print(f"🎤 Recording {duration}s of audio...")
@@ -264,27 +264,35 @@ def transcribe():
         sd.wait()
         print("🎤 Recording complete!")
         
-        # Save to temp file
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-            temp_path = f.name
-            write_wav(temp_path, sample_rate, (recording * 32767).astype(np.int16))
+        # Save to file
+        write_wav(temp_path, sample_rate, (recording * 32767).astype(np.int16))
+        print(f"💾 Saved to {temp_path}")
         
         print("🧠 Transcribing with Whisper...")
         model = whisper.load_model("base")  # Use 'base' for speed, 'medium' for accuracy
-        result = model.transcribe(temp_path, language="fr")
+        result = model.transcribe(temp_path, language="fr", fp16=False)
         
-        # Clean up temp file
-        os.remove(temp_path)
+        text = result['text'].strip()
+        print(f"📝 Transcription: {text}")
         
-        print(f"📝 Transcription: {result['text']}")
+        # Clean up
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+        
         return jsonify({
             "status": "ok",
-            "text": result['text'],
+            "text": text,
             "language": result.get('language', 'unknown')
         })
-    except ImportError:
-        return jsonify({"error": "Whisper not installed. Run: pip install openai-whisper"}), 500
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        return jsonify({"error": f"Import error: {e}"}), 500
     except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
