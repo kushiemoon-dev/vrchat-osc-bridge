@@ -13,6 +13,8 @@ import time
 import io
 import subprocess
 import webbrowser
+import os
+import platform
 
 # Try to import screenshot library
 try:
@@ -148,7 +150,12 @@ def launch_world():
     
     try:
         # Open the VRChat URL - this will trigger VRChat to join the world
-        webbrowser.open(launch_url)
+        if platform.system() == 'Windows':
+            # Use os.startfile on Windows for protocol URLs
+            os.startfile(launch_url)
+        else:
+            # Use webbrowser on other platforms
+            webbrowser.open(launch_url)
         return jsonify({"status": "launched", "url": launch_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
