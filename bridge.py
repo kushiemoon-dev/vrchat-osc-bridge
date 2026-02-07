@@ -237,6 +237,56 @@ def list_audio_devices():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    """Record audio and transcribe with Whisper"""
+    if not AUDIO_AVAILABLE:
+        return jsonify({"error": "Audio libs not installed"}), 500
+    
+    data = request.json or {}
+    duration = data.get('duration', 5)
+    device_id = data.get('device_id', None)  # Optional: specify input device
+    sample_rate = 16000  # Whisper prefers 16kHz
+    
+    try:
+        import tempfile
+        import whisper
+        
+        print(f"🎤 Recording {duration}s of audio...")
+        
+        # Set device if specified
+        if device_id is not None:
+            recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, 
+                             channels=1, dtype='float32', device=device_id)
+        else:
+            recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, 
+                             channels=1, dtype='float32')
+        sd.wait()
+        print("🎤 Recording complete!")
+        
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            temp_path = f.name
+            write_wav(temp_path, sample_rate, (recording * 32767).astype(np.int16))
+        
+        print("🧠 Transcribing with Whisper...")
+        model = whisper.load_model("base")  # Use 'base' for speed, 'medium' for accuracy
+        result = model.transcribe(temp_path, language="fr")
+        
+        # Clean up temp file
+        os.remove(temp_path)
+        
+        print(f"📝 Transcription: {result['text']}")
+        return jsonify({
+            "status": "ok",
+            "text": result['text'],
+            "language": result.get('language', 'unknown')
+        })
+    except ImportError:
+        return jsonify({"error": "Whisper not installed. Run: pip install openai-whisper"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     print("🦊 VRChat OSC Bridge - Lexis Edition")
     print(f"   OSC target: {VRC_IP}:{VRC_PORT}")
@@ -252,5 +302,6 @@ if __name__ == '__main__':
     print("  GET  /screenshot  - Capture screen (needs Pillow)")
     print("  POST /listen      - Record audio (needs sounddevice)")
     print("  GET  /listen/devices - List audio devices")
+    print("  POST /transcribe  - Record + transcribe (needs whisper)")
     print()
     app.run(host='0.0.0.0', port=8765, debug=False)
