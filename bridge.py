@@ -7,9 +7,18 @@ Run on the machine where VRChat is running.
 Requires: pip install python-osc flask
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from pythonosc import udp_client
 import time
+import io
+
+# Try to import screenshot library
+try:
+    from PIL import ImageGrab
+    SCREENSHOT_AVAILABLE = True
+except ImportError:
+    SCREENSHOT_AVAILABLE = False
+    print("⚠️  PIL not installed - screenshot disabled. Run: pip install Pillow")
 
 app = Flask(__name__)
 
@@ -111,6 +120,25 @@ def raw_osc():
     osc.send_message(address, args)
     return jsonify({"status": "sent", "address": address, "args": args})
 
+@app.route('/screenshot', methods=['GET'])
+def screenshot():
+    """Capture and return a screenshot"""
+    if not SCREENSHOT_AVAILABLE:
+        return jsonify({"error": "PIL not installed. Run: pip install Pillow"}), 500
+    
+    try:
+        # Capture the screen
+        img = ImageGrab.grab()
+        
+        # Convert to bytes
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='JPEG', quality=70)
+        img_bytes.seek(0)
+        
+        return send_file(img_bytes, mimetype='image/jpeg')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     print("🦊 VRChat OSC Bridge - Lexis Edition")
     print(f"   OSC target: {VRC_IP}:{VRC_PORT}")
@@ -122,5 +150,6 @@ if __name__ == '__main__':
     print("  POST /jump        - Jump")
     print("  POST /avatar/parameter - Set avatar param")
     print("  POST /raw         - Raw OSC message")
+    print("  GET  /screenshot  - Capture screen (needs Pillow)")
     print()
     app.run(host='0.0.0.0', port=8765, debug=False)
