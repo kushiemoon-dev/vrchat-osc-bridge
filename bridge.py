@@ -11,6 +11,8 @@ from flask import Flask, request, jsonify, send_file
 from pythonosc import udp_client
 import time
 import io
+import subprocess
+import webbrowser
 
 # Try to import screenshot library
 try:
@@ -120,6 +122,37 @@ def raw_osc():
     osc.send_message(address, args)
     return jsonify({"status": "sent", "address": address, "args": args})
 
+@app.route('/launch', methods=['POST'])
+def launch_world():
+    """Launch a VRChat world by URL or world ID"""
+    data = request.json
+    url = data.get('url', '')
+    world_id = data.get('world_id', '')
+    
+    if url:
+        # Direct URL (vrchat://launch?... or https://vrchat.com/home/world/...)
+        launch_url = url
+        if url.startswith('https://vrchat.com/home/world/'):
+            # Convert web URL to launch URL
+            # Extract world ID from URL like https://vrchat.com/home/world/wrld_xxx
+            parts = url.split('/')
+            for i, part in enumerate(parts):
+                if part.startswith('wrld_'):
+                    world_id = part
+                    break
+    
+    if world_id and not url:
+        launch_url = f"vrchat://launch?ref=vrchat.com&id={world_id}"
+    elif not url:
+        return jsonify({"error": "Provide 'url' or 'world_id'"}), 400
+    
+    try:
+        # Open the VRChat URL - this will trigger VRChat to join the world
+        webbrowser.open(launch_url)
+        return jsonify({"status": "launched", "url": launch_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/screenshot', methods=['GET'])
 def screenshot():
     """Capture and return a screenshot"""
@@ -150,6 +183,7 @@ if __name__ == '__main__':
     print("  POST /jump        - Jump")
     print("  POST /avatar/parameter - Set avatar param")
     print("  POST /raw         - Raw OSC message")
+    print("  POST /launch      - Join a world (url or world_id)")
     print("  GET  /screenshot  - Capture screen (needs Pillow)")
     print()
     app.run(host='0.0.0.0', port=8765, debug=False)
