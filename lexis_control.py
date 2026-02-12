@@ -8,26 +8,36 @@ import urllib.request
 import urllib.error
 import json
 import sys
+import os
 
-# Bridge configuration
-BRIDGE_HOST = "localhost"
-BRIDGE_PORT = 8765
+# Bridge configuration - use environment variables or defaults
+BRIDGE_HOST = os.getenv('BRIDGE_HOST', 'localhost')
+BRIDGE_PORT = int(os.getenv('BRIDGE_PORT', 8765))
 BRIDGE_URL = f"http://{BRIDGE_HOST}:{BRIDGE_PORT}"
+API_KEY = os.getenv('API_KEY', '')
 
 def send_command(endpoint, data=None):
     """Send a command to the bridge"""
     url = f"{BRIDGE_URL}{endpoint}"
-    
+
     if data is None:
         data = {}
-    
+
+    headers = {
+        'Content-Type': 'application/json'
+    }
+
+    # Add API key if available
+    if API_KEY:
+        headers['Authorization'] = f'Bearer {API_KEY}'
+
     req = urllib.request.Request(
         url,
         data=json.dumps(data).encode('utf-8'),
-        headers={'Content-Type': 'application/json'},
+        headers=headers,
         method='POST'
     )
-    
+
     try:
         with urllib.request.urlopen(req, timeout=5) as response:
             return json.loads(response.read().decode('utf-8'))
@@ -37,7 +47,10 @@ def send_command(endpoint, data=None):
 def health_check():
     """Check if bridge is running"""
     try:
-        req = urllib.request.Request(f"{BRIDGE_URL}/health")
+        headers = {}
+        if API_KEY:
+            headers['Authorization'] = f'Bearer {API_KEY}'
+        req = urllib.request.Request(f"{BRIDGE_URL}/health", headers=headers)
         with urllib.request.urlopen(req, timeout=5) as response:
             return json.loads(response.read().decode('utf-8'))
     except:
